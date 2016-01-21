@@ -29,7 +29,6 @@ Mandatory input parameters:
 
         Example for the 'Prod' target:
                 [Config]
-                loginUrl=https://login.jazz.net
                 jazzHubHost=https://hub.jazz.net
                 jazzHubProjectName=<The jazzhub project>
 
