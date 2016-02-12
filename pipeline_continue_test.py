@@ -364,9 +364,14 @@ def ssologin_old(jazzHubHost):
     print ('Target login URL is: %s' % proxyUrl)
     session = requests.Session()
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36',
-        'Accept': ':text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
     }
+
+#    headers = {
+#        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36',
+#        'Accept': ':text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+#    }
     
     # GET on https://login.jazz.net
     params = {
