@@ -48,7 +48,7 @@ def main():
     # Get the login cookies, try both login methods
     cookies = None
     for i in range(RETRY):
-        for f in [ssologin (jazzHubHost), ssologin_old (jazzHubHost]:
+        for f in [ssologin (jazzHubHost), ssologin_old (jazzHubHost)]:
             try:
                 cookies = f()
                 break
