@@ -43,8 +43,11 @@ def main():
     print "\nIDS project URL: %s" % (idsProjectURL) 
 
     # Get the login cookies
-    cookies = ssologin (jazzHubHost)
-    print 'Successfully logged into IDS, getting pipeline information ...'
+    try:
+        cookies = ssologin (jazzHubHost)
+        print 'Successfully logged into IDS, getting pipeline information ...'
+    except Exception as e:
+        cookies = ssologin_old (jazzHubHost)
 
     # headers
     headers = {
@@ -338,6 +341,157 @@ def ssologin(jazzHubHost):
                         (url, r.status_code))
 
     # At this point the cookies should be set
+    cookies = requests.utils.dict_from_cookiejar(session.cookies)
+#    print cookies
+    return cookies
+
+def ssologin_old(jazzHubHost):
+
+    print ('Attempting to log into JazzHub as %s ...'
+           % os.environ.get(IDS_USER_ENV_VAR))
+    
+    ssoUrl = "https://www-947.ibm.com"
+    loginJsp = "/account/userservices/jsp/login.jsp"
+    if jazzHubHost == "https://beta3.hub.jazz.net":
+        proxyUrl = "https://psdev.login.jazz.net"
+    elif jazzHubHost == "https://qa.hub.jazz.net":
+        proxyUrl = "https://stg.login.jazz.net"
+    elif jazzHubHost == "https://hub.jazz.net":
+        proxyUrl = "https://login.jazz.net"
+    else:
+        proxyUrl = "https://psdev.login.jazz.net"
+
+    print ('Target login URL is: %s' % proxyUrl)
+    session = requests.Session()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36',
+        'Accept': ':text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    }
+    
+    # GET on https://login.jazz.net
+    params = {
+        'redirect_uri': 'https://hub.jazz.net/'
+    }
+    url = proxyUrl + '/psso/proxy/jazzlogin'
+    r = session.get(url, params=params, headers=headers)
+    if r.status_code != 200:
+        raise Exception('Failed to GET %s, status code %s' %
+                        (url, r.status_code))
+    redirect_url = r.history[-1].url
+    redirect_url_parser = urlparse.urlparse(redirect_url)
+    authority = redirect_url_parser.netloc
+    
+    # POST to tamlogin.jsp
+    payload = {
+        'HTTP_BASE': 'http://%s' % authority,
+        'HTTPS_BASE': 'https://%s:443'  % authority,
+        'PROTOCOL': redirect_url_parser.scheme,
+        'URL': '%s?%s' % (redirect_url_parser.path, redirect_url_parser.params),
+        'ERROR': ''
+    }
+    url = 'https://%s/idaas/public/tamlogin.jsp' % authority
+    r = session.post(url, data=payload, headers=headers)
+    if r.status_code != 200:
+        raise Exception('Failed to POST %s, status code %s' %
+                        (url, r.status_code))
+    
+    # GET on saml
+    params = {
+        'RequestBinding': 'HTTPPost',
+        'ResponseBinding': 'HTTPPost',
+        'NameIdFormat': 'Email',
+        'PartnerId': 'https://%s/sps/saml20sp/saml20' % authority
+    }
+    sso_url = 'https://www-947.ibm.com'
+    url = '%s/FIM/sps/IBM_WWW_SAML20_EXTERNAL/saml20/logininitial' % sso_url
+    r = session.get(url, params=params, headers=headers)
+    if r.status_code != 200:
+        raise Exception('Failed to GET %s, status code %s' %
+                        (url, r.status_code))
+    sso_url_parser = urlparse.urlparse(r.url)
+    page = '%s?%s' % (sso_url_parser.path, sso_url_parser.query)
+    
+    params = {
+        'persistPage': 'true',
+        'page': page,
+        'PD-REFERER': authority,
+        'error': ''
+    }
+    sso_login_url = 'https://www-947.ibm.com/account/userservices/jsp/login.jsp'
+    r = session.get(sso_login_url, params=params, headers=headers)
+    if r.status_code != 200:
+        raise Exception('Failed to GET %s, status code %s' %
+                        (url, r.status_code))
+    
+    
+    # POST on pkmslogin
+    payload = {
+        'login-form-type': 'pwd',
+        'username': os.environ.get(IDS_USER_ENV_VAR),
+        'password': os.environ.get(IDS_PASS_ENV_VAR)
+    }
+    url = 'https://www-947.ibm.com/pkmslogin.form'
+    r = session.post(url, data=payload, headers=headers)
+    if r.status_code != 200:
+        raise Exception('Failed to POST %s, status code %s' %
+                        (url, r.status_code))
+    body = r.content
+    
+    # Cleanup the data, if previous line doesn't end with a '>' then append
+    lines = []
+    for line in body.split('\n'):
+        line = line.strip()
+        if len(lines) == 0 and not line.startswith('<form method="post"'):
+            continue
+        if line.startswith('</form>'):
+            break
+        if len(lines) == 0:
+            lines.append(line)
+        elif not lines[-1].endswith('>'):
+            lines[-1] = lines[-1] + line
+        else:
+            lines.append(line)
+    
+    # Extract the action URL from the "post" form
+    action_url = None
+    form_data = {}
+    for line in lines:
+        line = line.strip()
+        if line.startswith('<form method="post"'):
+            key = 'action="'
+            index = line.index(key)
+            if index == -1:
+                continue
+            line = line[index + len(key):]
+            action_url = line[0: line.index('"')]
+        elif line.startswith('<input type="hidden"'):
+            key = 'name="'
+            index = line.index(key)
+            if index == -1:
+                continue
+            line = line[index + len(key):]
+            param_name = line[0: line.index('"')]
+            key = 'value="'
+            index = line.index(key)
+            if index == -1:
+                continue
+            line = line[index + len(key):]
+            param_val = line[0: line.index('"')]
+            form_data[param_name] = param_val
+
+    if not action_url:
+        raise Exception('Failed to retrieve form action URL from %s' % url)
+    if not form_data:
+        raise Exception('Failed to retrieve form data from %s' % url)
+    
+    # POST on action URL (https://idaas.ng.bluemix.net/sps/saml20sp/saml20/login)
+    url = action_url
+    r = session.post(url, data=form_data, headers=headers)
+    if r.status_code != 200:
+        raise Exception('Failed to POST %s, status code %s' %
+                        (url, r.status_code))
+    
+    # At this point the cookies should have an LTPAToken_SSO_PSProd
     cookies = requests.utils.dict_from_cookiejar(session.cookies)
 #    print cookies
     return cookies
