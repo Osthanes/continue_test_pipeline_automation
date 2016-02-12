@@ -42,12 +42,26 @@ def main():
 
     print "\nIDS project URL: %s" % (idsProjectURL) 
 
+    # Number of retries to attempt
+    RETRY = 5
     # Get the login cookies
-    try:
-        cookies = ssologin (jazzHubHost)
-        print 'Successfully logged into IDS, getting pipeline information ...'
-    except Exception as e:
-        cookies = ssologin_old (jazzHubHost)
+    # Get the login cookies, try both login methods
+    cookies = None
+    for i in range(RETRY):
+        for f in [ssologin (jazzHubHost), ssologin_old (jazzHubHost]:
+            try:
+                cookies = f()
+                break
+            except Exception, e:
+                if i < RETRY - 1:
+                    print '\nFailed to log into IDS'
+                    traceback.print_exc(file=sys.stdout)
+                    time.sleep(10)
+                else:
+                    raise e
+        if cookies:
+            break
+    print 'Successfully logged into IDS, getting pipeline information ...'
 
     # headers
     headers = {
@@ -368,11 +382,6 @@ def ssologin_old(jazzHubHost):
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
     }
 
-#    headers = {
-#        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36',
-#        'Accept': ':text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-#    }
-    
     # GET on https://login.jazz.net
     params = {
         'redirect_uri': 'https://hub.jazz.net/'
@@ -380,8 +389,8 @@ def ssologin_old(jazzHubHost):
     url = proxyUrl + '/psso/proxy/jazzlogin'
     r = session.get(url, params=params, headers=headers)
     if r.status_code != 200:
-        raise Exception('Failed to GET %s, status code %s' %
-                        (url, r.status_code))
+        raise Exception('Failed to GET %s, status code %s\n%s' %
+                        (url, r.status_code, r.content))
     redirect_url = r.history[-1].url
     redirect_url_parser = urlparse.urlparse(redirect_url)
     authority = redirect_url_parser.netloc
