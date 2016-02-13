@@ -47,21 +47,14 @@ def main():
     # Get the login cookies
     # Get the login cookies, try both login methods
     cookies = None
-    for i in range(RETRY):
-        for f in [ssologin (jazzHubHost), ssologin_old (jazzHubHost)]:
-            try:
-                cookies = f()
-                break
-            except Exception, e:
-                if i < RETRY - 1:
-                    print '\nFailed to log into IDS'
-                    traceback.print_exc(file=sys.stdout)
-                    time.sleep(10)
-                else:
-                    raise e
-        if cookies:
-            break
-    print 'Successfully logged into IDS, getting pipeline information ...'
+    try:
+        cookies = ssologin (jazzHubHost)
+        print 'Successfully logged into IDS, getting pipeline information ...'
+    except Exception as e:
+        print '\nFailed to log into IDS. Try to login with old login'
+        print e.message
+        cookies = ssologin_old (jazzHubHost)
+        print 'Successfully logged into IDS with old login, getting pipeline information ...'
 
     # headers
     headers = {
