@@ -87,19 +87,27 @@ def main():
     print "Successfully triggered stage '%s'" % (curr_pipe_info[0][1])
 
     # Get next stages information
+    ret = 0
+    retries = 0
     sleepTime = 45;
-    next_pipe_info = []
-    print "\nStages execution status after triggered stage:"
-    next_pipe_info = getStageStatus(idsProjectURL, cookies, headers, sleepTime)
-    if next_pipe_info:
-        print "\nSuccessfully retrieved pipeline information after triggered stage ..."
-        for item in next_pipe_info:
-            print item[0], ', '.join(map(str, item[1:]))
-    else:
-        raise Exception("\nThe project '%s' does not have pipeline stage." % jazzHubProjectName)
+    while retries < 15:
+        next_pipe_info = []
+        print "\nStages execution status after triggered stage:"
+        next_pipe_info = getStageStatus(idsProjectURL, cookies, headers, sleepTime)
+        if next_pipe_info:
+            print "\nSuccessfully retrieved pipeline information after triggered stage ..."
+            for item in next_pipe_info:
+                print item[0], ', '.join(map(str, item[1:]))
+        else:
+            raise Exception("\nThe project '%s' does not have pipeline stage." % jazzHubProjectName)
 
-    ret = checkStageStatus(idsProjectURL, curr_pipe_info, next_pipe_info)
-    print "\nret: %s" %(ret)
+        ret = checkStageStatus(idsProjectURL, curr_pipe_info, next_pipe_info)
+        print "\nret: %s" %(ret)
+        if ret != 2:
+            break
+        time.sleep(sleepTime)
+        retries = retries + 1
+
     exit(ret)
 
 
