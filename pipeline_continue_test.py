@@ -29,9 +29,11 @@ import urlparse
 # Environment variables
 IDS_USER_ENV_VAR = 'ibmIdUsername'
 IDS_PASS_ENV_VAR = 'ibmIdPassword'
+LOGIN_URL = ""
+jazzHubHost = ""
 
 def main():
-
+    global LOGIN_URL
     # Read the IDS Project info from pipeline_test.properties
     config = ConfigParser.ConfigParser() 
     config.read('pipeline_test.properties')
@@ -39,22 +41,40 @@ def main():
     jazzHubProjectName = config.get('Config', 'jazzHubProjectName')
     jazzHubProjectName = string.replace(jazzHubProjectName, ' | ', '/')
     idsProjectURL = '%s/pipeline/%s' % (jazzHubHost, jazzHubProjectName)
-
     print "\nIDS project URL: %s" % (idsProjectURL) 
+    if jazzHubHost == "https://beta3.hub.jazz.net":
+        LOGIN_URL = "https://psdev.login.jazz.net"
+    elif jazzHubHost == "https://qa.hub.jazz.net":
+        LOGIN_URL = "https://stg.login.jazz.net"
+    elif jazzHubHost == "https://hub.jazz.net":
+        LOGIN_URL = "https://login.jazz.net"
+    else:
+        LOGIN_URL = "https://psdev.login.jazz.net"
+
+    print ('Target login URL is: %s' % LOGIN_URL)
 
     # Number of retries to attempt
     RETRY = 5
     # Get the login cookies
     # Get the login cookies, try both login methods
     cookies = None
-    try:
-        cookies = ssologin (jazzHubHost)
-        print 'Successfully logged into IDS, getting pipeline information ...'
-    except Exception as e:
-        print '\nFailed to log into IDS. Try to login with old login'
-        print e.message
-        cookies = ssologin_old (jazzHubHost)
-        print 'Successfully logged into IDS with old login, getting pipeline information ...'
+    # Get the login cookies, try both login methods
+    cookies = None
+    for i in range(RETRY):
+        for f in [ssologin, ssologin_old]:
+            try:
+                cookies = f()
+                break
+            except Exception, e:
+                if i < RETRY - 1:
+                    print '\nFailed to log into IDS'
+                    traceback.print_exc(file=sys.stdout)
+                    time.sleep(10)
+                else:
+                    raise e
+        if cookies:
+            break
+    print 'Successfully logged into IDS, getting pipeline information ...'
 
     # headers
     headers = {
@@ -82,8 +102,8 @@ def main():
     url = '%s/stages/%s/executions' % (idsProjectURL, stage_id)
     r = requests.post(url, headers=headers, cookies=cookies)
     if r.status_code != 201:
-        raise Exception('Failed to POST %s, status code %s' %
-                        (url, r.status_code))
+        raise Exception('Failed to POST %s, status code %s\n%s' %
+                        (url, r.status_code, r.content))
     print "Successfully triggered stage '%s'" % (curr_pipe_info[0][1])
 
     # Get next stages information
@@ -117,6 +137,9 @@ def getStageStatus(url, cookies, headers, sleepTime):
 
     while True:
         # Get the pipeline information
+        print "URL: ", url
+#        print "headers: ", headers
+#        print "cookies: ", cookies
         r = requests.get(url, headers=headers, cookies=cookies)
         if r.status_code != 200:
             raise Exception('Failed to GET %s, status code %s' %
@@ -262,22 +285,14 @@ def checkStageStatus(url, before, after):
             return 5
     return 0
 
-def ssologin(jazzHubHost):
-
-    # Login into IDS using the user/pass in the environment variables.
+def ssologin():
+    global LOGIN_URL
+    '''
+    Login into IDS using the user/pass in the environment variables; this does
+    uses the BlueID.
+    '''
     print ('Attempting to log into IDS as %s ...'
            % os.environ.get(IDS_USER_ENV_VAR))
-
-    if jazzHubHost == "https://beta3.hub.jazz.net":
-        proxyUrl = "https://psdev.login.jazz.net"
-    elif jazzHubHost == "https://qa.hub.jazz.net":
-        proxyUrl = "https://stg.login.jazz.net"
-    elif jazzHubHost == "https://hub.jazz.net":
-        proxyUrl = "https://login.jazz.net"
-    else:
-        proxyUrl = "https://psdev.login.jazz.net"
-
-    print ('Target login URL is: %s' % proxyUrl)
 
     session = requests.Session()
     headers = {
@@ -289,7 +304,7 @@ def ssologin(jazzHubHost):
     params = {
         'redirect_uri': 'https://hub.jazz.net/'
     }
-    url = proxyUrl + '/psso/proxy/jazzlogin'
+    url = LOGIN_URL + '/psso/proxy/jazzlogin'
     r = session.get(url, params=params, headers=headers)
     if r.status_code != 200:
         raise Exception('Failed to GET %s, status code %s' %
@@ -352,31 +367,22 @@ def ssologin(jazzHubHost):
     }
     r = session.post(url, data=payload, headers=headers)
     if r.status_code != 200:
-        raise Exception('Failed to POST %s, status code %s' %
-                        (url, r.status_code))
+        raise Exception('Failed to POST %s, status code %s\n%s' %
+                        (url, r.status_code, r.content))
 
     # At this point the cookies should be set
-    cookies = requests.utils.dict_from_cookiejar(session.cookies)
-#    print cookies
-    return cookies
+    return requests.utils.dict_from_cookiejar(session.cookies)
 
-def ssologin_old(jazzHubHost):
 
-    print ('Attempting to log into JazzHub as %s ...'
+def ssologin_old():
+    global LOGIN_URL
+    '''
+    Login into IDS using the user/pass in the environment variables; this does
+    not use the BlueID.
+    '''
+    print ('Attempting to log into IDS as %s ...'
            % os.environ.get(IDS_USER_ENV_VAR))
-    
-    ssoUrl = "https://www-947.ibm.com"
-    loginJsp = "/account/userservices/jsp/login.jsp"
-    if jazzHubHost == "https://beta3.hub.jazz.net":
-        proxyUrl = "https://psdev.login.jazz.net"
-    elif jazzHubHost == "https://qa.hub.jazz.net":
-        proxyUrl = "https://stg.login.jazz.net"
-    elif jazzHubHost == "https://hub.jazz.net":
-        proxyUrl = "https://login.jazz.net"
-    else:
-        proxyUrl = "https://psdev.login.jazz.net"
 
-    print ('Target login URL is: %s' % proxyUrl)
     session = requests.Session()
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36',
@@ -387,7 +393,7 @@ def ssologin_old(jazzHubHost):
     params = {
         'redirect_uri': 'https://hub.jazz.net/'
     }
-    url = proxyUrl + '/psso/proxy/jazzlogin'
+    url = LOGIN_URL + '/psso/proxy/jazzlogin'
     r = session.get(url, params=params, headers=headers)
     if r.status_code != 200:
         raise Exception('Failed to GET %s, status code %s\n%s' %
@@ -395,7 +401,7 @@ def ssologin_old(jazzHubHost):
     redirect_url = r.history[-1].url
     redirect_url_parser = urlparse.urlparse(redirect_url)
     authority = redirect_url_parser.netloc
-    
+
     # POST to tamlogin.jsp
     payload = {
         'HTTP_BASE': 'http://%s' % authority,
@@ -407,9 +413,9 @@ def ssologin_old(jazzHubHost):
     url = 'https://%s/idaas/public/tamlogin.jsp' % authority
     r = session.post(url, data=payload, headers=headers)
     if r.status_code != 200:
-        raise Exception('Failed to POST %s, status code %s' %
-                        (url, r.status_code))
-    
+        raise Exception('Failed to POST %s, status code %s\n%s' %
+                        (url, r.status_code, r.content))
+
     # GET on saml
     params = {
         'RequestBinding': 'HTTPPost',
@@ -425,7 +431,7 @@ def ssologin_old(jazzHubHost):
                         (url, r.status_code))
     sso_url_parser = urlparse.urlparse(r.url)
     page = '%s?%s' % (sso_url_parser.path, sso_url_parser.query)
-    
+
     params = {
         'persistPage': 'true',
         'page': page,
@@ -437,8 +443,7 @@ def ssologin_old(jazzHubHost):
     if r.status_code != 200:
         raise Exception('Failed to GET %s, status code %s' %
                         (url, r.status_code))
-    
-    
+
     # POST on pkmslogin
     payload = {
         'login-form-type': 'pwd',
@@ -448,10 +453,10 @@ def ssologin_old(jazzHubHost):
     url = 'https://www-947.ibm.com/pkmslogin.form'
     r = session.post(url, data=payload, headers=headers)
     if r.status_code != 200:
-        raise Exception('Failed to POST %s, status code %s' %
-                        (url, r.status_code))
+        raise Exception('Failed to POST %s, status code %s\n%s' %
+                        (url, r.status_code, r.content))
     body = r.content
-    
+
     # Cleanup the data, if previous line doesn't end with a '>' then append
     lines = []
     for line in body.split('\n'):
@@ -466,7 +471,7 @@ def ssologin_old(jazzHubHost):
             lines[-1] = lines[-1] + line
         else:
             lines.append(line)
-    
+
     # Extract the action URL from the "post" form
     action_url = None
     form_data = {}
@@ -498,18 +503,16 @@ def ssologin_old(jazzHubHost):
         raise Exception('Failed to retrieve form action URL from %s' % url)
     if not form_data:
         raise Exception('Failed to retrieve form data from %s' % url)
-    
+
     # POST on action URL (https://idaas.ng.bluemix.net/sps/saml20sp/saml20/login)
     url = action_url
     r = session.post(url, data=form_data, headers=headers)
     if r.status_code != 200:
-        raise Exception('Failed to POST %s, status code %s' %
-                        (url, r.status_code))
-    
-    # At this point the cookies should have an LTPAToken_SSO_PSProd
-    cookies = requests.utils.dict_from_cookiejar(session.cookies)
-#    print cookies
-    return cookies
+        raise Exception('Failed to POST %s, status code %s\n%s' %
+                        (url, r.status_code, r.content))
+
+    # At this point the cookies should be set
+    return requests.utils.dict_from_cookiejar(session.cookies)
 
 if __name__ == "__main__":
     try:
