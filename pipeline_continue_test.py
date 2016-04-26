@@ -212,9 +212,9 @@ def getStageStatus(url, cookies, headers, sleepTime):
 
                     print "stage status: '%s', job_name: '%s', job_type: '%s', job_number: '%s', job_status: '%s'" % (theStageExeStatus, theCompName, theJobType, theJobNumber, theJobStatus)
 
-                    if theStageExeStatus == "RUNNING" or theStageExeStatus == "QUEUED":
+                    if theStageExeStatus == "RUNNING" or theStageExeStatus == "QUEUED" or theStageExeStatus == "NEW":
                         mustContinue = True
-                    elif theJobStatus == "IN_PROGRESS" or theJobStatus == "QUEUED":
+                    elif theJobStatus == "IN_PROGRESS" or theJobStatus == "QUEUED" or theJobStatus == "None":
                         mustContinue = True
                     else:
                         sb.append(theStageId)
