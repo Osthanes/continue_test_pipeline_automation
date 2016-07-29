@@ -424,7 +424,7 @@ def ssologin_old():
         'PartnerId': 'https://%s/sps/saml20sp/saml20' % authority
     }
     sso_url = 'https://www-947.ibm.com'
-    url = '%s/FIM/sps/IBM_WWW_SAML20_EXTERNAL/saml20/logininitial' % sso_url
+    url = '%s/FIM2/sps/IBM_WWW_SAML20_EXTERNAL/saml20/logininitial' % sso_url
     r = session.get(url, params=params, headers=headers)
     if r.status_code != 200:
         raise Exception('Failed to GET %s, status code %s' %
