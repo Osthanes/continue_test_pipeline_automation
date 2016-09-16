@@ -332,6 +332,8 @@ def ssologin():
     idaas_url = html[0: html.find('")')]
     idaas_url_parser = urlparse.urlparse(idaas_url)
 
+    print ('idaas_url=%s' % idaas_url )
+
     # GET on the IDASS URL to setup the cookies
     r = session.get(idaas_url, headers=headers)
     if r.status_code != 200:
@@ -339,12 +341,17 @@ def ssologin():
                         (url, r.status_code))
 
     # Login IDASS page, get the form action
-    url = ('https://%s/idaas/mtfim/sps/idaas/login?%s' %
-        (idaas_url_parser.hostname, idaas_url_parser.query))
+    url = ('https://%s/idaas/mtfim/sps/authsvc?PolicyId=urn:ibm:security:authentication:asf:basicldapuser' %
+        (idaas_url_parser.hostname))
     r = session.get(url, headers=headers)
     if r.status_code != 200:
         raise Exception('Failed to GET %s, status code %s' %
                         (url, r.status_code))
+
+
+    print ('get %s' % url )
+    #print ('r.content= %s' % r.content)
+
 
     # Parse out the action for the ibmid-signin-form
     for line in r.content.split('\n'):
